@@ -4,6 +4,7 @@ package com.hng.stage1_string_analyzer.service;
 import com.hng.stage1_string_analyzer.model.AnalyzedString;
 import com.hng.stage1_string_analyzer.repository.AnalyzedStringRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -60,6 +61,7 @@ public class StringAnalysisService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
     public void deleteByValue(String value) {
         if (!repository.existsByValue(value)) {
             throw new NoSuchElementException("String not found");

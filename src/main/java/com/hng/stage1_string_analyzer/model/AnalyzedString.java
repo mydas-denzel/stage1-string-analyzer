@@ -12,9 +12,9 @@ import java.util.Map;
 @Builder
 public class AnalyzedString {
     @Id
-    private String id; // sha256 hash
+    private String id;
 
-    @Column(unique = true, nullable = false)
+    @Column(name = "string_value") // renamed from 'value'
     private String value;
 
     private int length;
