@@ -2,6 +2,7 @@ package com.hng.stage1_string_analyzer.service;
 
 import com.hng.stage1_string_analyzer.model.AnalyzedString;
 import com.hng.stage1_string_analyzer.repository.AnalyzedStringRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -123,11 +124,24 @@ public class StringAnalysisService {
         return result;
     }
 
+    /*
     public void deleteByValue(String value) {
         if (!repository.existsByValue(value)) {
             throw new NoSuchElementException("String not found");
         }
         repository.deleteByValue(value);
+    }
+
+    */
+
+    public boolean deleteByValue(String value) {
+        Optional<AnalyzedString> entity = repository.findByValue(value);
+        if (entity.isEmpty()) {
+            return false;
+        }
+
+        repository.delete(entity.get());
+        return true;
     }
 
     private Map<String, Integer> getCharFrequency(String input) {
