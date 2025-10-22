@@ -93,32 +93,42 @@ public class StringController {
         return ResponseEntity.ok(response);
     }
 
+    // ✅ UPDATED: Natural Language Filter endpoint (formatted to spec)
     @GetMapping("/filter-by-natural-language")
     public ResponseEntity<?> naturalLanguage(@RequestParam String query) {
         try {
-            var parsed = nlService.parse(query);
-            var result = analysisService.filter(
-                    (Boolean) parsed.get("isPalindrome"),
-                    (Integer) parsed.get("minLength"),
-                    null,
-                    (Integer) parsed.get("wordCount"),
-                    (String) parsed.get("containsCharacter")
-            );
+            // parse to snake_case map
+            Map<String, Object> parsed = nlService.parse(query);
+
+            // call the new filter method that accepts parsed filters
+            List<AnalyzedString> result = analysisService.filter(parsed);
 
             List<Map<String, Object>> formatted = result.stream()
                     .map(this::formatResponse)
                     .toList();
 
-            return ResponseEntity.ok(Map.of(
-                    "data", formatted,
-                    "count", formatted.size(),
-                    "interpreted_query", Map.of(
-                            "original", query,
-                            "parsed_filters", parsed
-                    )
-            ));
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("data", formatted);
+            response.put("count", formatted.size());
+
+            Map<String, Object> interpreted = new LinkedHashMap<>();
+            interpreted.put("original", query);
+            interpreted.put("parsed_filters", parsed);
+
+            response.put("interpreted_query", interpreted);
+
+            return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            // parse succeeded but filters conflict
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            // fallback (shouldn't normally reach here)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
         }
     }
 

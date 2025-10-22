@@ -1,10 +1,8 @@
 package com.hng.stage1_string_analyzer.service;
 
-
 import com.hng.stage1_string_analyzer.model.AnalyzedString;
 import com.hng.stage1_string_analyzer.repository.AnalyzedStringRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -48,6 +46,7 @@ public class StringAnalysisService {
         return repository.findByValue(value);
     }
 
+    // Existing filter signature kept for compatibility (AND semantics)
     public List<AnalyzedString> filter(
             Boolean isPalindrome, Integer minLength, Integer maxLength,
             Integer wordCount, String containsCharacter) {
@@ -57,11 +56,73 @@ public class StringAnalysisService {
                 .filter(a -> minLength == null || a.getLength() >= minLength)
                 .filter(a -> maxLength == null || a.getLength() <= maxLength)
                 .filter(a -> wordCount == null || a.getWordCount() == wordCount)
-                .filter(a -> containsCharacter == null || a.getCharacterFrequencyMap().containsKey(containsCharacter))
+                .filter(a -> containsCharacter == null || containsCharacter.isEmpty()
+                        || containsCharacterMatches(a, containsCharacter))
                 .collect(Collectors.toList());
     }
 
-    @Transactional
+    // NEW: accepts parsed filters (snake_case) directly
+    public List<AnalyzedString> filter(Map<String, Object> parsedFilters) {
+        // fetch all and apply filters step by step
+        List<AnalyzedString> all = repository.findAll();
+
+        if (parsedFilters == null || parsedFilters.isEmpty()) {
+            return all;
+        }
+
+        List<AnalyzedString> result = all.stream()
+                .filter(a -> {
+                    // is_palindrome
+                    if (parsedFilters.containsKey("is_palindrome")) {
+                        Boolean want = (Boolean) parsedFilters.get("is_palindrome");
+                        if (want != null && a.isPalindrome() != want) return false;
+                    }
+                    // word_count
+                    if (parsedFilters.containsKey("word_count")) {
+                        Integer wc = (Integer) parsedFilters.get("word_count");
+                        if (wc != null && a.getWordCount() != wc) return false;
+                    }
+                    // min_length
+                    if (parsedFilters.containsKey("min_length")) {
+                        Integer min = (Integer) parsedFilters.get("min_length");
+                        if (min != null && a.getLength() < min) return false;
+                    }
+                    // max_length
+                    if (parsedFilters.containsKey("max_length")) {
+                        Integer max = (Integer) parsedFilters.get("max_length");
+                        if (max != null && a.getLength() > max) return false;
+                    }
+                    // contains_character (single char)
+                    if (parsedFilters.containsKey("contains_character")) {
+                        String ch = String.valueOf(parsedFilters.get("contains_character"));
+                        if (!containsCharacterMatches(a, ch)) return false;
+                    }
+                    // contains_any_vowel
+                    if (parsedFilters.containsKey("contains_any_vowel") && (Boolean) parsedFilters.get("contains_any_vowel")) {
+                        if (!valueContainsAnyVowel(a.getValue())) return false;
+                    }
+                    // starts_with_vowel (first char is a vowel)
+                    if (parsedFilters.containsKey("starts_with_vowel") && (Boolean) parsedFilters.get("starts_with_vowel")) {
+                        if (!valueStartsWithVowel(a.getValue())) return false;
+                    }
+                    // startsWith / endsWith (optional strings)
+                    if (parsedFilters.containsKey("starts_with")) {
+                        String s = String.valueOf(parsedFilters.get("starts_with")).toLowerCase();
+                        if (!a.getValue().toLowerCase().startsWith(s)) return false;
+                    }
+                    if (parsedFilters.containsKey("ends_with")) {
+                        String s = String.valueOf(parsedFilters.get("ends_with")).toLowerCase();
+                        if (!a.getValue().toLowerCase().endsWith(s)) return false;
+                    }
+
+                    // passed all requested checks
+                    return true;
+                })
+                .collect(Collectors.toList());
+
+        return result;
+    }
+
     public void deleteByValue(String value) {
         if (!repository.existsByValue(value)) {
             throw new NoSuchElementException("String not found");
@@ -92,5 +153,25 @@ public class StringAnalysisService {
         } catch (Exception e) {
             throw new RuntimeException("SHA256 computation failed");
         }
+    }
+
+    // helpers
+    private boolean containsCharacterMatches(AnalyzedString a, String ch) {
+        if (ch == null || ch.isEmpty()) return false;
+        // check in characterFrequencyMap keys (case-insensitive)
+        return a.getCharacterFrequencyMap().keySet().stream()
+                .map(String::toLowerCase)
+                .anyMatch(k -> k.equals(ch.toLowerCase()));
+    }
+
+    private boolean valueContainsAnyVowel(String value) {
+        if (value == null) return false;
+        return value.toLowerCase().matches(".*[aeiou].*");
+    }
+
+    private boolean valueStartsWithVowel(String value) {
+        if (value == null || value.isEmpty()) return false;
+        char c = Character.toLowerCase(value.charAt(0));
+        return "aeiou".indexOf(c) >= 0;
     }
 }
